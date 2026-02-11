@@ -1,0 +1,10 @@
+openai
+chromadb
+streamlit
+python-dotenv
+PyPDF2
+python-docx
+sentence-transformers
+langchain
+langchain-openai
+langgraph
