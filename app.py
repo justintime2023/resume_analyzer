@@ -44,72 +44,68 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =====================================================
-# Sidebar: API Configuration
+# Sidebar: API Configuration (per-session, never shared)
 # =====================================================
 
 with st.sidebar:
     st.header("🔑 API Configuration")
-    st.caption("Enter your GenAI credentials below. These are never stored or logged.")
+    st.caption("Enter your GenAI credentials. These stay in YOUR browser session only.")
 
-    with st.expander("Configure API Settings", expanded=not all([
-        st.session_state.get("genai_api_key"),
-        st.session_state.get("genai_base_url"),
-        st.session_state.get("genai_model"),
-    ])):
+    # Auto-expand if not yet configured
+    is_configured = all([
+        st.session_state.get("_saved_api_key"),
+        st.session_state.get("_saved_base_url"),
+        st.session_state.get("_saved_model"),
+    ])
+
+    with st.expander("Configure API Settings", expanded=not is_configured):
         api_key = st.text_input(
             "GENAI API Key",
             type="password",
-            value=st.session_state.get("genai_api_key", os.getenv("GENAI_API_KEY", "")),
+            value="",
             placeholder="Enter your API key",
             key="input_api_key"
         )
         base_url = st.text_input(
             "GENAI Base URL",
-            value=st.session_state.get("genai_base_url", os.getenv("GENAI_BASE_URL", "")),
+            type="password",
+            value="",
             placeholder="https://your-api-endpoint.com/v1",
             key="input_base_url"
         )
         model = st.text_input(
             "GENAI Model",
-            value=st.session_state.get("genai_model", os.getenv("GENAI_MODEL", "")),
+            value="",
             placeholder="e.g. gpt-4o-mini, llama-3, etc.",
             key="input_model"
         )
 
         if st.button("💾 Save Configuration", use_container_width=True):
-            st.session_state["genai_api_key"] = api_key
-            st.session_state["genai_base_url"] = base_url
-            st.session_state["genai_model"] = model
-            st.success("Configuration saved!")
+            if api_key and base_url and model:
+                st.session_state["_saved_api_key"] = api_key
+                st.session_state["_saved_base_url"] = base_url
+                st.session_state["_saved_model"] = model
+                st.success("✅ Configuration saved for this session!")
+            else:
+                st.warning("Please fill in all three fields.")
 
     # Show connection status
-    has_key = bool(api_key or st.session_state.get("genai_api_key"))
-    has_url = bool(base_url or st.session_state.get("genai_base_url"))
-    has_model = bool(model or st.session_state.get("genai_model"))
-
-    if has_key and has_url and has_model:
+    if all([
+        st.session_state.get("_saved_api_key"),
+        st.session_state.get("_saved_base_url"),
+        st.session_state.get("_saved_model"),
+    ]):
         st.success("✅ API configured")
     else:
-        missing = []
-        if not has_key: missing.append("API Key")
-        if not has_url: missing.append("Base URL")
-        if not has_model: missing.append("Model")
-        st.warning(f"Missing: {', '.join(missing)}")
+        st.warning("⚠️ Please configure API credentials above")
 
     st.divider()
-    st.caption("ℹ️ Credentials are kept in your browser session only. Nothing is saved to disk or sent anywhere except to your configured API endpoint.")
+    st.caption("ℹ️ Credentials live only in your browser session. They are never saved to disk, never shared with other users, and are lost when you close the tab.")
 
-# Set env vars from sidebar inputs (so resume_agent_core picks them up)
-_api_key = api_key or st.session_state.get("genai_api_key", "")
-_base_url = base_url or st.session_state.get("genai_base_url", "")
-_model = model or st.session_state.get("genai_model", "")
-
-if _api_key:
-    os.environ["GENAI_API_KEY"] = _api_key
-if _base_url:
-    os.environ["GENAI_BASE_URL"] = _base_url
-if _model:
-    os.environ["GENAI_MODEL"] = _model
+# Get credentials from this user's session only (NEVER from os.environ)
+_api_key = st.session_state.get("_saved_api_key", "")
+_base_url = st.session_state.get("_saved_base_url", "")
+_model = st.session_state.get("_saved_model", "")
 
 
 # =====================================================
@@ -272,7 +268,7 @@ if analyze_button:
 
     with st.spinner(f"Screening {len(resumes)} resume(s)... This may take a minute."):
         try:
-            result = run_screening(resumes, job_description)
+            result = run_screening(resumes, job_description, _api_key, _base_url, _model)
         except Exception as e:
             st.error(f"Agent encountered an error: {str(e)}")
             st.error("Please check your API credentials in the sidebar (🔑).")

@@ -26,11 +26,11 @@ TOP_K_RESULTS = 3
 # LLM Setup (same pattern as hi.py)
 # =====================================================
 
-def get_llm(temperature=0.3):
+def get_llm(api_key, base_url, model, temperature=0.3):
     return ChatOpenAI(
-        api_key=os.getenv("GENAI_API_KEY"),
-        base_url=os.getenv("GENAI_BASE_URL"),
-        model=os.getenv("GENAI_MODEL"),
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
         temperature=temperature,
         max_tokens=1500,
     )
@@ -63,7 +63,11 @@ class AgentState(TypedDict):
     final_ranking: str
     error: str
     status: str
-    progress_log: Annotated[List[str], operator.add]  # log messages for UI
+    progress_log: Annotated[List[str], operator.add]
+    # Credentials (per-session, passed from UI)
+    api_key: str
+    base_url: str
+    model: str
 
 
 # =====================================================
@@ -170,7 +174,7 @@ def evaluate_resume_node(state: AgentState) -> dict:
         }
 
     context = "\n\n".join(matched_chunks)
-    llm = get_llm(temperature=0.2)
+    llm = get_llm(state["api_key"], state["base_url"], state["model"], temperature=0.2)
 
     prompt = f"""You are a professional HR assistant evaluating a resume against a job description.
 
@@ -258,7 +262,7 @@ Candidate {i}: {r['filename']}
   Gaps: {', '.join(r.get('gaps', []))}
 """
 
-    llm = get_llm(temperature=0.3)
+    llm = get_llm(state["api_key"], state["base_url"], state["model"], temperature=0.3)
     prompt = f"""You are a senior HR consultant. You have evaluated multiple resumes for a position.
 
 Job Description:
@@ -338,12 +342,15 @@ def build_graph():
     return workflow.compile()
 
 
-def run_screening(resumes: List[dict], job_description: str) -> dict:
+def run_screening(resumes: List[dict], job_description: str, api_key: str, base_url: str, model: str) -> dict:
     """
     Main entry point for the agent.
     Args:
         resumes: list of {"filename": str, "text": str}
         job_description: str
+        api_key: GenAI API key
+        base_url: GenAI base URL
+        model: GenAI model name
     Returns:
         Final agent state dict with evaluations, final_ranking, progress_log, etc.
     """
@@ -358,7 +365,10 @@ def run_screening(resumes: List[dict], job_description: str) -> dict:
         "final_ranking": "",
         "error": "",
         "status": "starting",
-        "progress_log": ["🚀 Starting Resume Screening Agent..."]
+        "progress_log": ["🚀 Starting Resume Screening Agent..."],
+        "api_key": api_key,
+        "base_url": base_url,
+        "model": model,
     }
 
     return graph.invoke(initial_state)
